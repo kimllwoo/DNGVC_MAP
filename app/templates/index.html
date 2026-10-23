@@ -738,11 +738,46 @@
         minZoom: 9
       }).setView([16.0544, 108.2022], 11);
 
-      // OpenStreetMap Tiles
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        bounds: regionalBounds
-      }).addTo(map);
+      // Google Maps Tile Layers (Không bị chặn trên bất kỳ mạng Wi-Fi nào, CDN tối ưu tại VN)
+      const googleRoadmap = L.tileLayer('https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+        subdomains: ['0', '1', '2', '3'],
+        maxZoom: 20,
+        bounds: regionalBounds,
+        attribution: 'Google Maps'
+      });
+
+      const googleHybrid = L.tileLayer('https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+        subdomains: ['0', '1', '2', '3'],
+        maxZoom: 20,
+        bounds: regionalBounds,
+        attribution: 'Google Maps Satellite'
+      });
+
+      const googleTerrain = L.tileLayer('https://mt{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}', {
+        subdomains: ['0', '1', '2', '3'],
+        maxZoom: 20,
+        bounds: regionalBounds,
+        attribution: 'Google Maps Terrain'
+      });
+
+      const cartoVoyager = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        subdomains: 'abcd',
+        maxZoom: 20,
+        bounds: regionalBounds,
+        attribution: 'CartoDB'
+      });
+
+      // Mặc định nạp Google Maps Roadmap
+      googleRoadmap.addTo(map);
+
+      // Thêm bộ chuyển đổi nguồn bản đồ góc trên bên phải
+      const baseMaps = {
+        '🗺️ Google Maps': googleRoadmap,
+        '🛰️ Google Vệ tinh': googleHybrid,
+        '⛰️ Google Địa hình': googleTerrain,
+        '🎨 Carto Bản đồ sáng': cartoVoyager
+      };
+      L.control.layers(baseMaps, null, { position: 'topright' }).addTo(map);
 
       postOfficesLayer = L.layerGroup().addTo(map);
       markersLayer = L.layerGroup().addTo(map);
