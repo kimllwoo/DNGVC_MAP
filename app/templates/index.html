@@ -1,0 +1,1495 @@
+<!DOCTYPE html>
+<html lang="vi" class="h-full">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>VTP Fleet Tracking — Giám Sát Đội Xe Đà Nẵng</title>
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+
+  <!-- Leaflet Map CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+
+  <!-- Tailwind CSS & Stitch Theme Configuration -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "primary": "#000000",
+            "on-primary": "#ffffff",
+            "secondary": "#006398",
+            "on-secondary": "#ffffff",
+            "background": "#f8f9ff",
+            "surface": "#ffffff",
+            "surface-dim": "#cbdbf5",
+            "surface-container-low": "#eff4ff",
+            "surface-container": "#e5eeff",
+            "surface-container-high": "#dce9ff",
+            "on-surface": "#0b1c30",
+            "on-surface-variant": "#45464d",
+            "outline": "#cbd5e1",
+            "outline-variant": "#e2e8f0",
+            "error": "#ba1a1a",
+            "error-container": "#ffdad6",
+            "on-error-container": "#93000a",
+          },
+          fontFamily: {
+            sans: ["Inter", "sans-serif"],
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    /* Circular Truck Marker Styles */
+    .vehicle-circle-wrapper {
+      background: transparent;
+      border: none;
+    }
+    .circle-truck-badge {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: #ffffff;
+      border: 3.5px solid #64748B;
+      box-shadow: 0 3px 8px rgba(15, 23, 42, 0.25);
+      cursor: pointer;
+      position: relative;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .circle-truck-badge:hover {
+      transform: scale(1.25);
+      z-index: 1000 !important;
+      box-shadow: 0 6px 16px rgba(15, 23, 42, 0.35);
+    }
+
+    /* Viền tròn theo trạng thái chuyển động */
+    .circle-border-green {
+      border-color: #10B981 !important; /* Đang chạy: viền xanh lá */
+    }
+    .circle-border-orange {
+      border-color: #F97316 !important; /* Dừng: viền màu cam */
+    }
+    .circle-border-gray {
+      border-color: #64748B !important; /* Tắt máy / Không dùng: viền màu xám */
+    }
+
+    /* Màu icon xe tải */
+    .truck-icon-blue {
+      color: #2563EB !important; /* DNG kết nối: icon xe tải màu xanh dương */
+    }
+    .truck-icon-yellow {
+      color: #EAB308 !important; /* DNG phát hàng: icon xe tải màu vàng */
+    }
+    .truck-icon-red {
+      color: #DC2626 !important; /* QNM: icon xe tải màu đỏ */
+    }
+
+    /* Tooltip hiển thị Biển số xe khi hover */
+    .leaflet-tooltip.truck-custom-tooltip {
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+      padding: 0 !important;
+    }
+    .leaflet-tooltip-top:before {
+      border-top-color: #0F172A !important;
+    }
+
+    /* Post Office Marker Styles (House Icon) */
+    .po-marker-wrapper {
+      background: transparent;
+      border: none;
+    }
+    .post-office-marker-card {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: #4F46E5;
+      color: #ffffff;
+      padding: 3px 8px 3px 5px;
+      border-radius: 16px;
+      box-shadow: 0 4px 10px rgba(79, 70, 229, 0.4);
+      border: 1.5px solid #ffffff;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s ease-in-out;
+    }
+    .post-office-marker-card:hover {
+      transform: scale(1.15) translateY(-2px);
+      box-shadow: 0 6px 16px rgba(79, 70, 229, 0.6);
+      z-index: 1000 !important;
+    }
+    .po-icon-badge {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.25);
+    }
+    .po-code-text {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+
+    /* Pulse animation */
+    .pulse-dot {
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background-color: #10B981;
+      box-shadow: 0 0 0 rgba(16, 185, 129, 0.4);
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+      70% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+    .leaflet-popup-content-wrapper {
+      padding: 0;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
+      overflow: hidden;
+    }
+    .leaflet-popup-content {
+      margin: 0 !important;
+      line-height: 1.4;
+    }
+    /* Hide scrollbar for tabs */
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body class="bg-background text-on-surface antialiased flex flex-col h-screen overflow-hidden">
+
+  <!-- ================= TOPBAR ================= -->
+  <header class="bg-surface border-b border-outline-variant px-4 py-2.5 flex items-center justify-between shrink-0 shadow-sm z-20">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded bg-[#E11D48] text-white flex items-center justify-center font-bold text-sm tracking-wider shadow-sm">
+        VTP
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-base font-bold tracking-tight text-on-surface">VTP FLEET TRACKING</h1>
+          <span class="text-[11px] font-semibold px-2 py-0.5 rounded bg-surface-container text-secondary">ĐÀ NẴNG</span>
+          <span id="demo-indicator" class="hidden text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-300">
+            DEMO MODE
+          </span>
+        </div>
+        <p class="text-xs text-on-surface-variant flex items-center gap-1.5">
+          <span id="last-sync-text">Cập nhật: Đang tải...</span>
+          <span class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+        </p>
+      </div>
+    </div>
+
+    <!-- Quick Stats Cards -->
+    <div class="hidden lg:flex items-center gap-3 text-xs">
+      <div class="bg-slate-50 border border-slate-200 rounded px-3 py-1 flex items-center gap-2">
+        <span class="text-slate-500">Tổng xe:</span>
+        <span id="stat-total" class="font-bold text-slate-800">0</span>
+      </div>
+      <div class="bg-emerald-50 border border-emerald-200 rounded px-3 py-1 flex items-center gap-2 text-emerald-700">
+        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+        <span>Đang chạy:</span>
+        <span id="stat-moving" class="font-bold">0</span>
+      </div>
+      <div class="bg-blue-50 border border-blue-200 rounded px-3 py-1 flex items-center gap-2 text-blue-700">
+        <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+        <span>Bật máy:</span>
+        <span id="stat-idle" class="font-bold">0</span>
+      </div>
+      <div class="bg-amber-50 border border-amber-200 rounded px-3 py-1 flex items-center gap-2 text-amber-700">
+        <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+        <span>Tạm dừng:</span>
+        <span id="stat-stopped" class="font-bold">0</span>
+      </div>
+      <div class="bg-rose-50 border border-rose-200 rounded px-3 py-1 flex items-center gap-2 text-rose-700">
+        <span class="w-2 h-2 rounded-full bg-rose-500"></span>
+        <span>Mất GPS:</span>
+        <span id="stat-offline" class="font-bold">0</span>
+      </div>
+    </div>
+
+    <!-- Top Action Buttons -->
+    <div class="flex items-center gap-2">
+      <button id="btn-post-offices" onclick="openPostOfficeModal()" class="flex items-center gap-1.5 px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-sm transition">
+        <span class="material-symbols-outlined text-[16px]">home</span>
+        <span>Điểm Bưu Cục</span>
+        <span id="po-count-badge" class="px-1.5 py-0.2 rounded-full bg-white/20 text-[10px] font-bold">5</span>
+      </button>
+      <button id="btn-sync" onclick="triggerSync()" class="flex items-center gap-1.5 px-3 py-1.5 rounded bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-sm transition">
+        <span class="material-symbols-outlined text-[16px]">sync</span>
+        <span>Đồng bộ GPS</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ================= SUB-NAVIGATION BAR ================= -->
+  <nav class="bg-surface-container-low border-b border-outline-variant px-4 py-1.5 flex items-center justify-between shrink-0">
+    <div class="flex items-center gap-1">
+      <button onclick="switchTab('map')" id="tab-btn-map" class="tab-btn px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 bg-white text-secondary shadow-xs border border-slate-200">
+        <span class="material-symbols-outlined text-[16px]">map</span>
+        <span>Bản đồ & Giám sát</span>
+      </button>
+      <button onclick="switchTab('table')" id="tab-btn-table" class="tab-btn px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 text-on-surface-variant hover:bg-white/60">
+        <span class="material-symbols-outlined text-[16px]">table_rows</span>
+        <span>Danh sách xe (<span id="tab-count-table">0</span>)</span>
+      </button>
+      <button onclick="switchTab('providers')" id="tab-btn-providers" class="tab-btn px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 text-on-surface-variant hover:bg-white/60">
+        <span class="material-symbols-outlined text-[16px]">hub</span>
+        <span>Nguồn GPS & API</span>
+      </button>
+    </div>
+
+    <!-- Provider breakdown pills -->
+    <div class="hidden sm:flex items-center gap-2 text-xs">
+      <span class="text-slate-400">Nguồn:</span>
+      <span class="px-2 py-0.5 rounded bg-[#FFF1F2] text-[#E11D48] font-semibold border border-rose-200" id="badge-viettel-count">Viettel: 0</span>
+      <span class="px-2 py-0.5 rounded bg-[#EFF6FF] text-[#2563EB] font-semibold border border-blue-200" id="badge-adsun-count">Adsun: 0</span>
+    </div>
+  </nav>
+
+  <!-- ================= MAIN CONTENT VIEWPORT ================= -->
+  <main class="flex-1 relative overflow-hidden flex flex-col">
+
+    <!-- VIEW 1: MAP & TELEMETRY SPLIT VIEW -->
+    <div id="view-map" class="w-full h-full flex flex-col md:flex-row overflow-hidden">
+      <!-- Left Vehicle List Panel -->
+      <aside class="w-full md:w-80 lg:w-96 bg-surface border-r border-outline-variant flex flex-col h-1/3 md:h-full shrink-0 z-10 shadow-sm">
+        <!-- Search & Filter Controls -->
+        <div class="p-2.5 border-b border-outline-variant bg-slate-50/50 space-y-2 shrink-0">
+          <div class="relative">
+            <span class="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">search</span>
+            <input id="search-input" type="text" oninput="filterVehicles()" placeholder="Tìm biển số, tài xế, quản lý..." 
+              class="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-slate-300 rounded focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary"/>
+          </div>
+          <!-- Filter Chips -->
+          <div class="flex items-center gap-1 text-[11px] overflow-x-auto no-scrollbar pb-0.5">
+            <button onclick="setFilter('status', 'all')" class="chip-status px-2 py-1 rounded bg-slate-200 font-semibold text-slate-800" data-val="all">Tất cả</button>
+            <button onclick="setFilter('status', 'moving')" class="chip-status px-2 py-1 rounded bg-slate-100 text-slate-600 hover:bg-slate-200" data-val="moving">Chạy</button>
+            <button onclick="setFilter('status', 'stopped')" class="chip-status px-2 py-1 rounded bg-slate-100 text-slate-600 hover:bg-slate-200" data-val="stopped">Dừng</button>
+            <button onclick="setFilter('provider', 'all')" class="chip-provider ml-auto px-2 py-1 rounded bg-slate-200 font-semibold text-slate-800" data-val="all">GPS: Tất cả</button>
+            <button onclick="setFilter('provider', 'viettel')" class="chip-provider px-2 py-1 rounded bg-slate-100 text-[#E11D48] hover:bg-rose-50" data-val="viettel">Viettel</button>
+            <button onclick="setFilter('provider', 'adsun')" class="chip-provider px-2 py-1 rounded bg-slate-100 text-[#2563EB] hover:bg-blue-50" data-val="adsun">Adsun</button>
+          </div>
+        </div>
+
+        <!-- Vehicle Scroll List -->
+        <div id="vehicle-list-container" class="flex-1 overflow-y-auto divide-y divide-outline-variant">
+          <!-- Dynamically populated rows -->
+          <div class="p-4 text-center text-xs text-slate-400">Đang tải danh sách phương tiện...</div>
+        </div>
+      </aside>
+
+      <!-- Right Leaflet Map Canvas -->
+      <section class="flex-1 h-2/3 md:h-full relative">
+        <div id="fleet-map" class="w-full h-full bg-slate-100 z-0"></div>
+
+        <!-- Map Control Overlay: Legend & Center Reset -->
+        <div class="absolute bottom-4 right-4 z-[400] bg-white/95 backdrop-blur-sm p-3 rounded-lg border border-slate-200 shadow-md text-xs space-y-2 min-w-[210px]">
+          <div class="font-bold text-slate-800 pb-1 border-b border-slate-100 flex items-center justify-between gap-3">
+            <span>Chú thích bản đồ</span>
+            <button onclick="resetMapBounds()" title="Xem toàn bộ xe" class="text-secondary hover:underline flex items-center gap-0.5 text-[11px]">
+              <span class="material-symbols-outlined text-[14px]">fit_screen</span> Zoom fit
+            </button>
+          </div>
+          
+          <!-- Motion Status (Circle Border) -->
+          <div class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Viền trạng thái</div>
+          <div class="flex items-center gap-2">
+            <span class="w-4 h-4 rounded-full border-2 border-emerald-500 bg-white flex items-center justify-center"></span>
+            <span>Đang chạy (moving)</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="w-4 h-4 rounded-full border-2 border-orange-500 bg-white flex items-center justify-center"></span>
+            <span>Dừng / nổ máy (idle)</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="w-4 h-4 rounded-full border-2 border-slate-400 bg-white flex items-center justify-center"></span>
+            <span>Tắt máy / offline</span>
+          </div>
+
+          <!-- Vehicle Route Color (Icon Color) -->
+          <div class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider pt-1 border-t border-slate-100">Màu xe tải</div>
+          <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-[16px] text-blue-600">local_shipping</span>
+            <span>DNG Kết nối (Xanh dương)</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-[16px] text-amber-500">local_shipping</span>
+            <span>DNG Phát hàng (Vàng)</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-[16px] text-red-600">local_shipping</span>
+            <span>QNM - Quảng Nam (Đỏ)</span>
+          </div>
+
+          <!-- Post Office -->
+          <div class="flex items-center justify-between pt-1 border-t border-slate-100">
+            <div class="flex items-center gap-2">
+              <span class="flex items-center justify-center w-5 h-5 rounded-full bg-indigo-600 text-white text-[12px]">
+                <span class="material-symbols-outlined text-[13px]">home</span>
+              </span>
+              <span>Điểm Bưu Cục</span>
+            </div>
+            <label class="flex items-center gap-1 text-[11px] text-slate-600 cursor-pointer">
+              <input type="checkbox" id="checkbox-show-po" checked onchange="togglePostOfficeMarkers()" class="rounded text-indigo-600 w-3.5 h-3.5">
+            </label>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- VIEW 2: VEHICLE TABLE VIEW -->
+    <div id="view-table" class="hidden w-full h-full overflow-y-auto p-4 bg-slate-50 flex flex-col">
+      <div class="bg-white border border-outline-variant rounded-lg shadow-sm flex flex-col flex-1 overflow-hidden">
+        <div class="p-3 border-b border-outline-variant flex items-center justify-between gap-4 bg-slate-50/50">
+          <div>
+            <h2 class="text-sm font-bold text-slate-900">Danh Mục Quản Lý & Tải Trọng Đội Xe</h2>
+            <p class="text-xs text-slate-500">Đối chiếu danh sách phương tiện, tải trọng, tài xế phụ trách và hạn kiểm định / bảo dưỡng</p>
+          </div>
+          <button onclick="exportTableToCSV()" class="px-3 py-1.5 rounded border border-slate-300 bg-white hover:bg-slate-50 text-xs font-semibold flex items-center gap-1">
+            <span class="material-symbols-outlined text-[16px]">download</span>
+            <span>Xuất Excel/CSV</span>
+          </button>
+        </div>
+
+        <div class="flex-1 overflow-auto">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead class="bg-slate-100 text-slate-700 sticky top-0 border-b border-slate-200 font-semibold z-10">
+              <tr>
+                <th class="p-2.5 w-12 text-center">STT</th>
+                <th class="p-2.5">Biển số</th>
+                <th class="p-2.5">Hãng & Tải trọng</th>
+                <th class="p-2.5">Nhà xe / Quản lý</th>
+                <th class="p-2.5">Tài xế phụ trách</th>
+                <th class="p-2.5">Nguồn GPS</th>
+                <th class="p-2.5">Vận hành</th>
+                <th class="p-2.5 text-center">Tồn hàng (kiện)</th>
+                <th class="p-2.5">Hạn KĐ</th>
+                <th class="p-2.5">Bảo dưỡng</th>
+                <th class="p-2.5 text-center">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody id="fleet-table-body" class="divide-y divide-slate-200 font-sans">
+              <!-- Dynamically populated table rows -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW 3: GPS PROVIDERS & API INVENTORY -->
+    <div id="view-providers" class="hidden w-full h-full overflow-y-auto p-4 bg-slate-50 space-y-6">
+      <!-- Provider Health Cards -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Viettel VTracking Card -->
+        <div class="bg-white border border-outline-variant rounded-lg p-4 shadow-sm flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded bg-rose-50 border border-rose-200 text-[#E11D48] flex items-center justify-center font-bold">
+                  VT
+                </div>
+                <div>
+                  <h3 class="font-bold text-sm text-slate-900">Viettel VTracking</h3>
+                  <p class="text-xs text-slate-500">vtracking2.viettel.vn</p>
+                </div>
+              </div>
+              <span id="badge-prov-vtr" class="text-[11px] font-bold px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
+                Chưa kết nối
+              </span>
+            </div>
+
+            <div class="mt-3 space-y-2 text-xs">
+              <div class="flex justify-between py-1 border-b border-slate-50">
+                <span class="text-slate-500">URL Đăng nhập:</span>
+                <span class="font-mono text-slate-700">POST /login1</span>
+              </div>
+              <div class="flex justify-between py-1 border-b border-slate-50">
+                <span class="text-slate-500">Telemetry Gateway:</span>
+                <span class="font-mono text-slate-700">POST /portDataWithParam</span>
+              </div>
+              <div class="flex justify-between py-1 border-b border-slate-50">
+                <span class="text-slate-500">Bảo mật WAF:</span>
+                <span class="text-slate-700">Viettel Cloudrity WAF (User-Agent verify)</span>
+              </div>
+              <div class="flex justify-between py-1 border-b border-slate-50">
+                <span class="text-slate-500">Số xe quản lý:</span>
+                <span id="vtr-vehicle-count" class="font-bold text-slate-800">0 xe</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+            <span class="text-[11px] text-slate-400">Cấu hình qua file .env (VTRACKING_USERNAME)</span>
+            <button onclick="testProvider('viettel')" class="px-2.5 py-1 rounded bg-rose-50 text-[#E11D48] border border-rose-200 text-xs font-semibold hover:bg-rose-100">
+              Kiểm tra kết nối
+            </button>
+          </div>
+        </div>
+
+        <!-- Adsun GPS Card -->
+        <div class="bg-white border border-outline-variant rounded-lg p-4 shadow-sm flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded bg-blue-50 border border-blue-200 text-[#2563EB] flex items-center justify-center font-bold">
+                  AS
+                </div>
+                <div>
+                  <h3 class="font-bold text-sm text-slate-900">Adsun GPS</h3>
+                  <p class="text-xs text-slate-500">auth.adsun.vn & dinhvi.adsun.vn</p>
+                </div>
+              </div>
+              <span id="badge-prov-adsun" class="text-[11px] font-bold px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
+                Chưa kết nối
+              </span>
+            </div>
+
+            <div class="mt-3 space-y-2 text-xs">
+              <div class="flex justify-between py-1 border-b border-slate-50">
+                <span class="text-slate-500">URL Đăng nhập:</span>
+                <span class="font-mono text-slate-700">POST /Auth/LoginV4</span>
+              </div>
+              <div class="flex justify-between py-1 border-b border-slate-50">
+                <span class="text-slate-500">Telemetry API:</span>
+                <span class="font-mono text-slate-700">GET /api/CarTracking/GetListCarRealtime</span>
+              </div>
+              <div class="flex justify-between py-1 border-b border-slate-50">
+                <span class="text-slate-500">Header xác thực:</span>
+                <span class="text-slate-700">token, x-access-token</span>
+              </div>
+              <div class="flex justify-between py-1 border-b border-slate-50">
+                <span class="text-slate-500">Số xe quản lý:</span>
+                <span id="adsun-vehicle-count" class="font-bold text-slate-800">0 xe</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+            <span class="text-[11px] text-slate-400">Cấu hình qua file .env (ADSUN_USERNAME)</span>
+            <button onclick="testProvider('adsun')" class="px-2.5 py-1 rounded bg-blue-50 text-[#2563EB] border border-blue-200 text-xs font-semibold hover:bg-blue-100">
+              Kiểm tra kết nối
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Inventory Table Required by Phase 1 -->
+      <div class="bg-white border border-outline-variant rounded-lg shadow-sm p-4">
+        <h3 class="font-bold text-sm text-slate-900 mb-2">Bảng Kiểm Kê API & Mức Độ Xác Minh (Giai đoạn 1)</h3>
+        <p class="text-xs text-slate-500 mb-4">Tổng hợp các endpoint đã quan sát, kiểm tra probe trực tiếp trên máy chủ, và mức độ sẵn sàng</p>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs border border-slate-200">
+            <thead class="bg-slate-100 text-slate-700 font-semibold">
+              <tr>
+                <th class="p-2 border-b border-r border-slate-200">Nhà cung cấp</th>
+                <th class="p-2 border-b border-r border-slate-200">Endpoint & Method</th>
+                <th class="p-2 border-b border-r border-slate-200">Cách xác thực</th>
+                <th class="p-2 border-b border-r border-slate-200">Dữ liệu trả về</th>
+                <th class="p-2 border-b border-r border-slate-200">Mức độ xác minh</th>
+                <th class="p-2 border-b border-slate-200">Ghi chú & Phần còn thiếu</th>
+              </tr>
+            </thead>
+            <tbody id="inventory-table-body" class="divide-y divide-slate-200 font-sans">
+              <!-- Dynamically populated from /api/fleet/inventory -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ================= VEHICLE DETAIL MODAL / DRAWER ================= -->
+  <div id="vehicle-modal" class="hidden fixed inset-0 z-[1000] bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+      <div class="p-4 bg-slate-900 text-white flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <span class="material-symbols-outlined text-2xl text-secondary-container">local_shipping</span>
+          <div>
+            <div class="flex items-center gap-2">
+              <h3 id="modal-plate" class="text-base font-bold font-mono tracking-tight text-white">43H-332.81</h3>
+              <span id="modal-provider-badge" class="px-2 py-0.5 rounded text-[10px] font-bold">Viettel</span>
+              <span id="modal-motion-badge" class="px-2 py-0.5 rounded text-[10px] font-bold">Đang chạy</span>
+            </div>
+            <p id="modal-model" class="text-xs text-slate-300">ISUZU 1.99T — VTP Đà Nẵng</p>
+          </div>
+        </div>
+        <button onclick="closeModal()" class="text-slate-400 hover:text-white">
+          <span class="material-symbols-outlined text-xl">close</span>
+        </button>
+      </div>
+
+      <div class="p-4 space-y-4 max-h-[75vh] overflow-y-auto text-xs">
+        <!-- Telemetry block -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          <div class="bg-slate-50 p-2.5 rounded border border-slate-100">
+            <span class="text-slate-400 block text-[10px]">Vận tốc</span>
+            <span id="modal-speed" class="text-sm font-bold text-slate-800">45 km/h</span>
+          </div>
+          <div class="bg-slate-50 p-2.5 rounded border border-slate-100">
+            <span class="text-slate-400 block text-[10px]">Khóa điện</span>
+            <span id="modal-ignition" class="text-sm font-bold text-slate-800">BẬT</span>
+          </div>
+          <div class="bg-slate-50 p-2.5 rounded border border-slate-100">
+            <span class="text-slate-400 block text-[10px]">Vận hành</span>
+            <span id="modal-cargo" class="text-sm font-bold text-slate-800">Kết nối</span>
+          </div>
+          <div class="bg-slate-50 p-2.5 rounded border border-slate-100">
+            <span class="text-slate-400 block text-[10px]">Thời điểm GPS</span>
+            <span id="modal-gpstime" class="text-xs font-semibold text-slate-800">13:45</span>
+          </div>
+        </div>
+
+        <!-- Location -->
+        <div class="bg-slate-50 p-3 rounded border border-slate-100">
+          <span class="text-slate-400 block text-[10px] mb-0.5">Vị trí hiện tại</span>
+          <p id="modal-address" class="text-slate-800 font-medium">KCN Hòa Khánh, Liên Chiểu, Đà Nẵng</p>
+          <p id="modal-coords" class="text-[11px] font-mono text-slate-500 mt-1">16.0682, 108.1518</p>
+        </div>
+
+        <!-- Driver and Management -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div class="border border-slate-200 rounded p-3 space-y-1.5">
+            <h4 class="font-bold text-slate-800 border-b border-slate-100 pb-1">Phụ Trách Vận Hành</h4>
+            <div class="flex justify-between"><span class="text-slate-500">Tài xế:</span><span id="modal-driver" class="font-semibold text-slate-800">-</span></div>
+            <div class="flex justify-between"><span class="text-slate-500">Quản lý:</span><span id="modal-manager" class="font-semibold text-slate-800">-</span></div>
+            <div class="flex justify-between"><span class="text-slate-500">Nhà xe / Đội:</span><span id="modal-garage" class="font-semibold text-slate-800">-</span></div>
+          </div>
+          <div class="border border-slate-200 rounded p-3 space-y-1.5">
+            <h4 class="font-bold text-slate-800 border-b border-slate-100 pb-1">Đăng Kiểm & Bảo Dưỡng</h4>
+            <div class="flex justify-between"><span class="text-slate-500">KM hiện tại:</span><span id="modal-odo" class="font-semibold text-slate-800">-</span></div>
+            <div class="flex justify-between"><span class="text-slate-500">Tình trạng BD:</span><span id="modal-maint" class="font-semibold text-slate-800">-</span></div>
+            <div class="flex justify-between"><span class="text-slate-500">Hạn kiểm định:</span><span id="modal-insp" class="font-semibold text-slate-800">-</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="p-3 bg-slate-50 border-t border-slate-100 flex justify-end">
+        <button onclick="closeModal()" class="px-4 py-1.5 rounded bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold text-xs">
+          Đóng
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= POST OFFICE MANAGEMENT MODAL ================= -->
+  <div id="post-office-modal" class="hidden fixed inset-0 z-[1000] bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+      <div class="p-4 bg-indigo-900 text-white flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-lg bg-indigo-700/80 flex items-center justify-center">
+            <span class="material-symbols-outlined text-xl">home</span>
+          </div>
+          <div>
+            <h3 class="text-base font-bold">Quản Lý Điểm Bưu Cục & Hub</h3>
+            <p class="text-xs text-indigo-200">Thêm, xóa và hiển thị vị trí các bưu cục trên bản đồ (hình ngôi nhà)</p>
+          </div>
+        </div>
+        <button onclick="closePostOfficeModal()" class="text-indigo-300 hover:text-white">
+          <span class="material-symbols-outlined text-xl">close</span>
+        </button>
+      </div>
+
+      <div class="p-4 space-y-4 max-h-[75vh] overflow-y-auto text-xs">
+        <!-- Form Thêm Bưu Cục Mới -->
+        <div class="bg-indigo-50/60 p-3.5 rounded-lg border border-indigo-100 space-y-3">
+          <h4 class="font-bold text-slate-800 flex items-center gap-1.5 text-xs">
+            <span class="material-symbols-outlined text-indigo-600 text-[18px]">add_location_alt</span>
+            <span>Thêm Bưu Cục / Hub Mới</span>
+          </h4>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <div>
+              <label class="block text-slate-600 font-medium mb-1">Tên bưu cục *</label>
+              <input id="po-input-name" type="text" placeholder="VD: Bưu cục Cẩm Lệ" 
+                class="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded focus:outline-none focus:border-indigo-500 text-xs"/>
+            </div>
+            <div>
+              <label class="block text-slate-600 font-medium mb-1">Ký hiệu *</label>
+              <input id="po-input-code" type="text" placeholder="VD: BC_CL, HUB_DNG" 
+                class="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded focus:outline-none focus:border-indigo-500 uppercase text-xs font-mono"/>
+            </div>
+            <div>
+              <div class="flex items-center justify-between mb-1">
+                <label class="text-slate-600 font-medium">Tọa độ (Lat, Lng) *</label>
+                <button type="button" onclick="enableMapPickCoords()" class="text-[10px] text-indigo-600 hover:underline flex items-center gap-0.5">
+                  <span class="material-symbols-outlined text-[12px]">pin_drop</span> Click trên bản đồ
+                </button>
+              </div>
+              <input id="po-input-coords" type="text" placeholder="VD: 16.0185, 108.1965" 
+                class="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded focus:outline-none focus:border-indigo-500 font-mono text-xs"/>
+            </div>
+            <div>
+              <label class="block text-slate-600 font-medium mb-1">Địa chỉ</label>
+              <input id="po-input-address" type="text" placeholder="VD: QL1A, Cẩm Lệ, Đà Nẵng" 
+                class="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded focus:outline-none focus:border-indigo-500 text-xs"/>
+            </div>
+          </div>
+          <div class="flex items-center justify-between pt-1">
+            <span id="po-pick-hint" class="text-[11px] text-amber-700 font-medium hidden">
+              💡 Hãy click vào 1 điểm trên bản đồ để tự động lấy tọa độ!
+            </span>
+            <button onclick="submitNewPostOffice()" class="ml-auto px-4 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs flex items-center gap-1 shadow-sm transition">
+              <span class="material-symbols-outlined text-[16px]">add</span>
+              <span>Lưu Bưu Cục</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Danh Sách Bưu Cục Hiện Có -->
+        <div class="space-y-2">
+          <div class="flex items-center justify-between">
+            <h4 class="font-bold text-slate-800 text-xs">Danh Sách Bưu Cục Đang Quản Lý (<span id="po-list-count">0</span>)</h4>
+            <div class="flex items-center gap-2">
+              <label class="flex items-center gap-1.5 text-[11px] text-slate-600 cursor-pointer">
+                <input type="checkbox" id="toggle-po-markers" checked onchange="togglePostOfficeMarkers()" class="rounded text-indigo-600">
+                <span>Hiện trên bản đồ</span>
+              </label>
+            </div>
+          </div>
+          <div class="border border-slate-200 rounded-lg overflow-hidden">
+            <table class="w-full text-left border-collapse">
+              <thead class="bg-slate-100 text-[11px] text-slate-700 font-semibold border-b border-slate-200">
+                <tr>
+                  <th class="p-2 w-20">Ký hiệu</th>
+                  <th class="p-2">Tên Bưu Cục</th>
+                  <th class="p-2 w-36">Tọa độ</th>
+                  <th class="p-2">Địa chỉ</th>
+                  <th class="p-2 text-center w-24">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody id="po-table-body" class="divide-y divide-slate-100 text-xs">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="p-3 bg-slate-50 border-t border-slate-100 flex justify-end">
+        <button onclick="closePostOfficeModal()" class="px-4 py-1.5 rounded bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold text-xs">
+          Đóng
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Leaflet Map JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+  <!-- Application Logic -->
+  <script>
+    // State
+    let fleetVehicles = [];
+    let postOffices = [];
+    let map = null;
+    let markersLayer = null;
+    let postOfficesLayer = null;
+    let selectedVehicle = null;
+    let isPickingMapCoords = false;
+    let showPostOffices = true;
+    let activeFilters = {
+      provider: 'all',
+      status: 'all',
+      search: ''
+    };
+
+    // Initialize Dashboard
+    document.addEventListener('DOMContentLoaded', () => {
+      initMap();
+      loadFleetData();
+      loadPostOffices();
+      loadInventory();
+      // Auto refresh every 30s
+      setInterval(loadFleetData, 30000);
+    });
+
+    // Regional bounding box: 50% Thừa Thiên Huế (Bắc: 16.55) đến 50% Quảng Ngãi (Nam: 14.95)
+    const southWestLimit = L.latLng(14.95, 107.10);
+    const northEastLimit = L.latLng(16.55, 109.15);
+    const regionalBounds = L.latLngBounds(southWestLimit, northEastLimit);
+
+    function initMap() {
+      // Centered at Da Nang City, locked to 50% Huế -> 50% Quảng Ngãi
+      map = L.map('fleet-map', {
+        zoomControl: true,
+        attributionControl: false,
+        maxBounds: regionalBounds,
+        maxBoundsViscosity: 1.0,
+        minZoom: 9
+      }).setView([16.0544, 108.2022], 11);
+
+      // OpenStreetMap Tiles
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        bounds: regionalBounds
+      }).addTo(map);
+
+      postOfficesLayer = L.layerGroup().addTo(map);
+      markersLayer = L.layerGroup().addTo(map);
+
+      map.on('click', handleMapClick);
+    }
+
+    async function loadFleetData() {
+      try {
+        const [sumRes, vehRes] = await Promise.all([
+          fetch('/api/fleet/summary'),
+          fetch('/api/fleet/vehicles')
+        ]);
+
+        if (sumRes.ok && vehRes.ok) {
+          const summary = await sumRes.json();
+          fleetVehicles = await vehRes.json();
+
+          updateSummaryUI(summary);
+          renderVehicleList();
+          renderVehicleTable();
+          renderMapMarkers();
+        }
+      } catch (err) {
+        console.error('Error fetching fleet data:', err);
+      }
+    }
+
+    function updateSummaryUI(summary) {
+      document.getElementById('stat-total').textContent = summary.total_vehicles;
+      document.getElementById('stat-moving').textContent = summary.motion_stats.moving || 0;
+      document.getElementById('stat-idle').textContent = summary.motion_stats.idle || 0;
+      document.getElementById('stat-stopped').textContent = summary.motion_stats.stopped || 0;
+      document.getElementById('stat-offline').textContent = summary.motion_stats.offline || 0;
+
+      document.getElementById('tab-count-table').textContent = summary.total_vehicles;
+      document.getElementById('badge-viettel-count').textContent = `Viettel: ${summary.provider_breakdown.viettel || 0}`;
+      document.getElementById('badge-adsun-count').textContent = `Adsun: ${summary.provider_breakdown.adsun || 0}`;
+
+      const demoEl = document.getElementById('demo-indicator');
+      if (summary.has_mock_data) {
+        demoEl.classList.remove('hidden');
+      } else {
+        demoEl.classList.add('hidden');
+      }
+
+      if (summary.last_sync) {
+        const d = new Date(summary.last_sync);
+        document.getElementById('last-sync-text').textContent = `Cập nhật: ${d.toLocaleTimeString('vi-VN')} ${d.toLocaleDateString('vi-VN')}`;
+      }
+
+      // Update provider cards
+      if (summary.providers) {
+        summary.providers.forEach(p => {
+          if (p.provider_name.toLowerCase().includes('viettel')) {
+            const b = document.getElementById('badge-prov-vtr');
+            b.textContent = p.status.toUpperCase();
+            b.className = p.status === 'connected' 
+              ? 'text-[11px] font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200'
+              : 'text-[11px] font-bold px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200';
+            document.getElementById('vtr-vehicle-count').textContent = `${p.vehicle_count} xe`;
+          } else if (p.provider_name.toLowerCase().includes('adsun')) {
+            const b = document.getElementById('badge-prov-adsun');
+            b.textContent = p.status.toUpperCase();
+            b.className = p.status === 'connected'
+              ? 'text-[11px] font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200'
+              : 'text-[11px] font-bold px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200';
+            document.getElementById('adsun-vehicle-count').textContent = `${p.vehicle_count} xe`;
+          }
+        });
+      }
+    }
+
+    function getFilteredVehicles() {
+      return fleetVehicles.filter(v => {
+        if (activeFilters.provider !== 'all' && v.provider.toLowerCase() !== activeFilters.provider) {
+          return false;
+        }
+        if (activeFilters.status !== 'all' && v.motion_status.toLowerCase() !== activeFilters.status) {
+          return false;
+        }
+        if (activeFilters.search) {
+          const q = activeFilters.search.toLowerCase();
+          const match = (
+            v.plate_number.toLowerCase().includes(q) ||
+            v.normalized_plate.toLowerCase().includes(q) ||
+            (v.driver_name && v.driver_name.toLowerCase().includes(q)) ||
+            (v.manager && v.manager.toLowerCase().includes(q))
+          );
+          if (!match) return false;
+        }
+        return true;
+      });
+    }
+
+    function renderVehicleList() {
+      const container = document.getElementById('vehicle-list-container');
+      const filtered = getFilteredVehicles();
+
+      if (filtered.length === 0) {
+        container.innerHTML = `<div class="p-4 text-center text-xs text-slate-400">Không tìm thấy xe phù hợp</div>`;
+        return;
+      }
+
+      container.innerHTML = filtered.map(v => {
+        const isViettel = v.provider === 'viettel';
+        const provClass = isViettel ? 'bg-[#FFF1F2] text-[#E11D48] border-rose-200' : 'bg-[#EFF6FF] text-[#2563EB] border-blue-200';
+        const isMoving = v.motion_status === 'moving';
+        const isIdle = v.motion_status === 'idle';
+        const isStopped = v.motion_status === 'stopped';
+        const isOffline = v.motion_status === 'offline';
+        const isReturned = v.business_status === 'ĐÃ TRẢ';
+
+        let statusText = 'Mất GPS';
+        let statusClass = 'text-slate-400';
+        if (isReturned) {
+          statusText = 'Đã trả';
+          statusClass = 'text-slate-400';
+        } else if (v.is_mock) {
+          statusText = `${Math.round(v.speed || 0)} km/h [DEMO]`;
+          statusClass = 'text-amber-600 font-semibold';
+        } else if (isMoving) {
+          statusText = `${Math.round(v.speed || 0)} km/h`;
+          statusClass = 'text-emerald-600 font-semibold';
+        } else if (isIdle) {
+          statusText = 'Bật máy (0 km/h)';
+          statusClass = 'text-blue-600';
+        } else if (isStopped) {
+          statusText = 'Tắt máy / Dừng';
+          statusClass = 'text-amber-600';
+        }
+
+        const sourceLabel = v.is_mock 
+          ? '<span class="text-[9px] px-1 py-0.2 rounded bg-amber-50 text-amber-700 border border-amber-200">DEMO</span>'
+          : (v.latitude != null ? '<span class="text-[9px] px-1 py-0.2 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">GPS THẬT</span>' : '<span class="text-[9px] px-1 py-0.2 rounded bg-slate-100 text-slate-500">CHƯA CÓ TỌA ĐỘ</span>');
+
+        return `
+          <div onclick="selectVehicle('${v.normalized_plate}')" 
+            class="p-2.5 hover:bg-slate-50 cursor-pointer transition flex items-center justify-between border-l-2 ${selectedVehicle && selectedVehicle.normalized_plate === v.normalized_plate ? 'bg-sky-50/70 border-secondary' : 'border-transparent'}">
+            <div class="space-y-1">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <span class="font-mono font-bold text-xs text-slate-900">${v.plate_number}</span>
+                <span class="text-[10px] px-1.5 py-0.2 rounded border font-semibold ${provClass}">
+                  ${isViettel ? 'Viettel' : 'Adsun'}
+                </span>
+                ${sourceLabel}
+                ${v.pending_packages_count > 0 ? `
+                  <span class="text-[9px] px-1 py-0.2 rounded bg-rose-50 text-rose-600 font-bold border border-rose-100" title="Kiện tồn trên xe">
+                    ${v.pending_packages_count} kiện
+                  </span>` : ''}
+              </div>
+              <div class="text-[11px] text-slate-500 truncate max-w-[200px]">
+                ${v.driver_name ? `TX: ${v.driver_name}` : (v.manager || v.vehicle_name || 'VTP')}
+              </div>
+            </div>
+            <div class="text-right text-[11px]">
+              <div class="flex items-center justify-end gap-1 ${statusClass}">
+                ${isMoving ? '<span class="pulse-dot"></span>' : ''}
+                <span>${statusText}</span>
+              </div>
+              <span class="text-[10px] text-slate-400">${v.tonnage_kg ? (v.tonnage_kg/1000).toFixed(1) + 'T' : ''}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderMapMarkers() {
+      if (!markersLayer) return;
+      markersLayer.clearLayers();
+
+      const filtered = getFilteredVehicles();
+      const bounds = [];
+
+      filtered.forEach(v => {
+        if (v.latitude == null || v.longitude == null) return;
+
+        bounds.push([v.latitude, v.longitude]);
+
+        const isViettel = v.provider === 'viettel';
+        const prov = (v.province || '').toUpperCase();
+        const biz = (v.business_status || '');
+
+        // 1. Màu icon xe tải:
+        // - QNM: màu đỏ
+        // - DNG phát hàng: màu vàng
+        // - DNG kết nối: màu xanh dương
+        let truckColorClass = 'truck-icon-blue';
+        let roleLabel = 'DNG - Kết nối';
+        if (prov === 'QNM') {
+          truckColorClass = 'truck-icon-red';
+          roleLabel = 'QNM';
+        } else if (biz.includes('Phát hàng')) {
+          truckColorClass = 'truck-icon-yellow';
+          roleLabel = 'DNG - Phát hàng';
+        } else {
+          truckColorClass = 'truck-icon-blue';
+          roleLabel = 'DNG - Kết nối';
+        }
+
+        // 2. Viền màu hình tròn:
+        // - Xe đang chạy: viền xanh lá
+        // - Dừng: viền màu cam
+        // - Tắt máy/dùng: viền màu xám
+        let borderClass = 'circle-border-gray';
+        let motionLabel = 'Tắt máy';
+        if (v.motion_status === 'moving') {
+          borderClass = 'circle-border-green';
+          motionLabel = 'Đang chạy';
+        } else if (v.motion_status === 'idle') {
+          borderClass = 'circle-border-orange';
+          motionLabel = 'Bật máy dừng';
+        } else if (v.motion_status === 'stopped') {
+          borderClass = 'circle-border-gray';
+          motionLabel = 'Tắt máy';
+        } else {
+          borderClass = 'circle-border-gray';
+          motionLabel = 'Mất GPS';
+        }
+
+        // Icon xe tải hình tròn (không hiện bks trực tiếp)
+        const customIcon = L.divIcon({
+          className: 'vehicle-circle-wrapper',
+          html: `
+            <div class="circle-truck-badge ${borderClass}">
+              <span class="material-symbols-outlined text-[19px] ${truckColorClass}">local_shipping</span>
+            </div>
+          `,
+          iconSize: [34, 34],
+          iconAnchor: [17, 17]
+        });
+
+        const marker = L.marker([v.latitude, v.longitude], { icon: customIcon });
+
+        // Tooltip hiện Biển số xe khi trỏ chuột vào (hover)
+        const tooltipHtml = `
+          <div class="px-2.5 py-1.5 font-mono font-bold text-xs bg-slate-900 text-white rounded-md shadow-xl border border-slate-700 whitespace-nowrap">
+            <div class="flex items-center gap-1.5">
+              <span class="material-symbols-outlined text-[15px] ${truckColorClass}">local_shipping</span>
+              <span class="text-sm font-bold tracking-tight text-white">${v.plate_number}</span>
+            </div>
+            <div class="text-[10px] font-sans font-normal text-slate-300 mt-0.5 flex items-center gap-2">
+              <span class="font-semibold text-slate-200">${roleLabel}</span>
+              <span>•</span>
+              <span class="${v.motion_status === 'moving' ? 'text-emerald-400 font-semibold' : (v.motion_status === 'idle' ? 'text-amber-400 font-semibold' : 'text-slate-400')}">${motionLabel}</span>
+              ${v.motion_status === 'moving' ? `<span>(${Math.round(v.speed || 0)} km/h)</span>` : ''}
+            </div>
+          </div>
+        `;
+
+        marker.bindTooltip(tooltipHtml, {
+          direction: 'top',
+          offset: [0, -18],
+          className: 'truck-custom-tooltip',
+          opacity: 1
+        });
+
+        // Popup content khi click
+        const popupHtml = `
+          <div class="p-3 text-xs font-sans w-64 space-y-2">
+            <div class="flex items-center justify-between pb-1.5 border-b border-slate-100">
+              <div class="flex items-center gap-1.5">
+                <span class="material-symbols-outlined text-[18px] ${truckColorClass}">local_shipping</span>
+                <span class="font-mono font-bold text-sm text-slate-900">${v.plate_number}</span>
+              </div>
+              <span class="px-1.5 py-0.5 rounded text-[10px] font-bold ${isViettel ? 'bg-rose-100 text-rose-700' : 'bg-blue-100 text-blue-700'}">
+                ${isViettel ? 'Viettel' : 'Adsun'}
+              </span>
+            </div>
+            <div class="space-y-1 text-slate-600">
+              <div class="flex justify-between">
+                <span>Vận tốc:</span>
+                <span class="font-bold text-slate-800">${Math.round(v.speed || 0)} km/h</span>
+              </div>
+              <div class="flex justify-between">
+                <span>Trạng thái máy:</span>
+                <span class="font-semibold ${v.motion_status === 'moving' ? 'text-emerald-600' : (v.motion_status === 'idle' ? 'text-amber-600' : 'text-slate-600')}">${motionLabel}</span>
+              </div>
+              <div class="flex justify-between">
+                <span>Phân loại:</span>
+                <span class="font-bold text-slate-800">${roleLabel}</span>
+              </div>
+              <div class="flex justify-between">
+                <span>Tài xế:</span>
+                <span class="font-medium text-slate-800">${v.driver_name || '-'}</span>
+              </div>
+              <div class="text-[11px] text-slate-500 truncate pt-1 border-t border-slate-50">
+                ${v.address || `${v.latitude}, ${v.longitude}`}
+              </div>
+            </div>
+            <button onclick="openModal('${v.normalized_plate}')" class="w-full mt-2 py-1 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded text-center text-xs">
+              Chi tiết phương tiện
+            </button>
+          </div>
+        `;
+
+        marker.bindPopup(popupHtml);
+        marker.on('click', () => {
+          selectedVehicle = v;
+          renderVehicleList();
+        });
+
+        markersLayer.addLayer(marker);
+      });
+
+      // Fit bounds if vehicles exist
+      if (bounds.length > 0 && !selectedVehicle) {
+        map.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 });
+      }
+    }
+
+    function selectVehicle(cleanPlate) {
+      const v = fleetVehicles.find(x => x.normalized_plate === cleanPlate);
+      if (!v) return;
+
+      selectedVehicle = v;
+      renderVehicleList();
+
+      if (v.latitude != null && v.longitude != null) {
+        map.flyTo([v.latitude, v.longitude], 15, { duration: 1 });
+      }
+    }
+
+    function resetMapBounds() {
+      const bounds = [];
+      getFilteredVehicles().forEach(v => {
+        if (v.latitude != null && v.longitude != null) {
+          bounds.push([v.latitude, v.longitude]);
+        }
+      });
+      if (bounds.length > 0) {
+        map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
+      } else {
+        map.fitBounds(regionalBounds);
+      }
+    }
+
+    // ================= POST OFFICE MANAGEMENT FUNCTIONS =================
+    async function loadPostOffices() {
+      try {
+        const res = await fetch('/api/fleet/post-offices');
+        if (res.ok) {
+          postOffices = await res.json();
+          renderPostOfficeMarkers();
+          renderPostOfficeTable();
+          const badge = document.getElementById('po-count-badge');
+          if (badge) badge.textContent = postOffices.length;
+          const listCount = document.getElementById('po-list-count');
+          if (listCount) listCount.textContent = postOffices.length;
+        }
+      } catch (err) {
+        console.error('Error loading post offices:', err);
+      }
+    }
+
+    function renderPostOfficeMarkers() {
+      if (!postOfficesLayer) return;
+      postOfficesLayer.clearLayers();
+      if (!showPostOffices) return;
+
+      postOffices.forEach(po => {
+        if (po.latitude == null || po.longitude == null) return;
+
+        const poIcon = L.divIcon({
+          className: 'po-marker-wrapper',
+          html: `
+            <div class="post-office-marker-card" title="${po.name} (${po.code})">
+              <div class="po-icon-badge">
+                <span class="material-symbols-outlined text-[14px]">home</span>
+              </div>
+              <span class="po-code-text">${po.code}</span>
+            </div>
+          `,
+          iconSize: [85, 26],
+          iconAnchor: [42, 13]
+        });
+
+        const marker = L.marker([po.latitude, po.longitude], { icon: poIcon });
+        const popupHtml = `
+          <div class="p-3 text-xs font-sans w-64 space-y-2">
+            <div class="flex items-center gap-2 pb-1.5 border-b border-indigo-100">
+              <div class="w-7 h-7 rounded bg-indigo-600 text-white flex items-center justify-center shrink-0">
+                <span class="material-symbols-outlined text-[16px]">home</span>
+              </div>
+              <div>
+                <div class="font-bold text-slate-900 leading-tight">${po.name}</div>
+                <div class="text-[10px] text-indigo-600 font-mono font-bold">${po.code}</div>
+              </div>
+            </div>
+            <div class="space-y-1 text-slate-600">
+              <div><span class="text-slate-400">Địa chỉ:</span> <span class="font-medium text-slate-800">${po.address || 'Chưa cập nhật'}</span></div>
+              <div><span class="text-slate-400">Tọa độ:</span> <span class="font-mono text-[11px] text-slate-700">${po.latitude}, ${po.longitude}</span></div>
+            </div>
+            <div class="pt-2 border-t border-slate-100 flex gap-2">
+              <button onclick="deletePostOffice('${po.code}')" class="w-full py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold rounded text-xs flex items-center justify-center gap-1 border border-rose-200 transition">
+                <span class="material-symbols-outlined text-[14px]">delete</span>
+                <span>Xóa điểm này</span>
+              </button>
+            </div>
+          </div>
+        `;
+        marker.bindPopup(popupHtml);
+        postOfficesLayer.addLayer(marker);
+      });
+    }
+
+    function renderPostOfficeTable() {
+      const tbody = document.getElementById('po-table-body');
+      if (!tbody) return;
+      if (postOffices.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="p-3 text-center text-slate-400">Chưa có bưu cục nào</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = postOffices.map(po => `
+        <tr class="hover:bg-slate-50 transition">
+          <td class="p-2 font-mono font-bold text-indigo-700">${po.code}</td>
+          <td class="p-2 font-semibold text-slate-800">${po.name}</td>
+          <td class="p-2 font-mono text-[11px] text-slate-600">${po.latitude}, ${po.longitude}</td>
+          <td class="p-2 text-slate-600 truncate max-w-[160px]">${po.address || '-'}</td>
+          <td class="p-2 text-center flex items-center justify-center gap-1">
+            <button onclick="flyToLocation(${po.latitude}, ${po.longitude})" class="p-1 text-indigo-600 hover:bg-indigo-50 rounded" title="Xem trên map">
+              <span class="material-symbols-outlined text-[16px]">visibility</span>
+            </button>
+            <button onclick="deletePostOffice('${po.code}')" class="p-1 text-rose-600 hover:bg-rose-50 rounded" title="Xóa bưu cục">
+              <span class="material-symbols-outlined text-[16px]">delete</span>
+            </button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function flyToLocation(lat, lng) {
+      closePostOfficeModal();
+      if (map) {
+        map.flyTo([lat, lng], 15, { duration: 1 });
+      }
+    }
+
+    function togglePostOfficeMarkers() {
+      const chk = document.getElementById('checkbox-show-po');
+      const chkModal = document.getElementById('toggle-po-markers');
+      if (chk) showPostOffices = chk.checked;
+      else if (chkModal) showPostOffices = chkModal.checked;
+      else showPostOffices = !showPostOffices;
+
+      if (chk) chk.checked = showPostOffices;
+      if (chkModal) chkModal.checked = showPostOffices;
+      renderPostOfficeMarkers();
+    }
+
+    function openPostOfficeModal() {
+      document.getElementById('post-office-modal').classList.remove('hidden');
+      renderPostOfficeTable();
+    }
+
+    function closePostOfficeModal() {
+      document.getElementById('post-office-modal').classList.add('hidden');
+      isPickingMapCoords = false;
+      const hint = document.getElementById('po-pick-hint');
+      if (hint) hint.classList.add('hidden');
+    }
+
+    function enableMapPickCoords() {
+      isPickingMapCoords = true;
+      document.getElementById('post-office-modal').classList.add('hidden');
+      const hint = document.getElementById('po-pick-hint');
+      if (hint) hint.classList.remove('hidden');
+      alert('Đã kích hoạt chế độ chọn tọa độ! Hãy click chuột vào vị trí bất kỳ trên bản đồ để tự động lấy tọa độ.');
+    }
+
+    function handleMapClick(e) {
+      if (!isPickingMapCoords) return;
+      isPickingMapCoords = false;
+      const lat = e.latlng.lat.toFixed(6);
+      const lng = e.latlng.lng.toFixed(6);
+      document.getElementById('po-input-coords').value = `${lat}, ${lng}`;
+      openPostOfficeModal();
+      const hint = document.getElementById('po-pick-hint');
+      if (hint) hint.classList.add('hidden');
+    }
+
+    async function submitNewPostOffice() {
+      const name = document.getElementById('po-input-name').value.trim();
+      const code = document.getElementById('po-input-code').value.trim();
+      const coords = document.getElementById('po-input-coords').value.trim();
+      const address = document.getElementById('po-input-address').value.trim();
+
+      if (!name) { alert('Vui lòng nhập Tên bưu cục!'); return; }
+      if (!code) { alert('Vui lòng nhập Ký hiệu bưu cục!'); return; }
+      if (!coords) { alert('Vui lòng nhập Tọa độ bưu cục (VD: 16.0682, 108.1518)!'); return; }
+
+      try {
+        const res = await fetch('/api/fleet/post-offices', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, code, coordinates: coords, address })
+        });
+        if (res.ok) {
+          document.getElementById('po-input-name').value = '';
+          document.getElementById('po-input-code').value = '';
+          document.getElementById('po-input-coords').value = '';
+          document.getElementById('po-input-address').value = '';
+          await loadPostOffices();
+          alert(`Đã thêm thành công bưu cục: ${name} (${code})!`);
+        } else {
+          const err = await res.json();
+          alert('Lỗi: ' + (err.detail || 'Không thể thêm bưu cục'));
+        }
+      } catch (err) {
+        alert('Lỗi kết nối: ' + err.message);
+      }
+    }
+
+    async function deletePostOffice(code) {
+      if (!confirm(`Bạn có chắc chắn muốn xóa bưu cục [${code}] khỏi bản đồ?`)) {
+        return;
+      }
+      try {
+        const res = await fetch(`/api/fleet/post-offices/${encodeURIComponent(code)}`, {
+          method: 'DELETE'
+        });
+        if (res.ok) {
+          await loadPostOffices();
+        } else {
+          const err = await res.json();
+          alert('Lỗi khi xóa: ' + (err.detail || 'Không thể xóa'));
+        }
+      } catch (err) {
+        alert('Lỗi kết nối khi xóa: ' + err.message);
+      }
+    }
+
+    function renderVehicleTable() {
+      const tbody = document.getElementById('fleet-table-body');
+      tbody.innerHTML = fleetVehicles.map((v, i) => {
+        const isViettel = v.provider === 'viettel';
+        const isReturned = v.business_status === 'ĐÃ TRẢ';
+
+        return `
+          <tr class="hover:bg-slate-50 transition border-b border-slate-100 ${isReturned ? 'opacity-60 bg-slate-50/50' : ''}">
+            <td class="p-2.5 text-center text-slate-400 font-mono">${i + 1}</td>
+            <td class="p-2.5 font-mono font-bold text-slate-900">${v.plate_number}</td>
+            <td class="p-2.5">
+              <div class="font-medium text-slate-800">${v.vehicle_name || 'Xe tải'}</div>
+              <div class="text-[11px] text-slate-400">${v.tonnage_kg ? (v.tonnage_kg).toLocaleString() + ' kg' : '-'}</div>
+            </td>
+            <td class="p-2.5">
+              <div class="font-medium text-slate-800">${v.garage || '-'}</div>
+              <div class="text-[11px] text-slate-500">${v.manager || '-'}</div>
+            </td>
+            <td class="p-2.5 text-slate-700">${v.driver_name || '<span class="text-slate-400">Chưa gán</span>'}</td>
+            <td class="p-2.5">
+              <span class="px-2 py-0.5 rounded font-bold text-[10px] ${isViettel ? 'bg-rose-100 text-rose-700' : 'bg-blue-100 text-blue-700'}">
+                ${isViettel ? 'Viettel' : 'Adsun'}
+              </span>
+            </td>
+            <td class="p-2.5">
+              <span class="px-2 py-0.5 rounded text-[10px] font-semibold ${isReturned ? 'bg-slate-200 text-slate-700' : 'bg-emerald-100 text-emerald-800'}">
+                ${v.business_status}
+              </span>
+            </td>
+            <td class="p-2.5 text-center">
+              ${v.pending_packages_count > 0 
+                ? `<span class="px-2 py-0.5 rounded bg-rose-100 text-rose-700 font-bold">${v.pending_packages_count}</span>` 
+                : '<span class="text-slate-300">0</span>'}
+            </td>
+            <td class="p-2.5 font-mono text-[11px] text-slate-600">${v.inspection_expiry || '-'}</td>
+            <td class="p-2.5 text-[11px] text-slate-600">${v.maintenance_status || 'Bình thường'}</td>
+            <td class="p-2.5 text-center">
+              <button onclick="openModal('${v.normalized_plate}')" class="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-semibold">
+                Xem
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    async function loadInventory() {
+      try {
+        const res = await fetch('/api/fleet/inventory');
+        if (res.ok) {
+          const items = await res.json();
+          const tbody = document.getElementById('inventory-table-body');
+          tbody.innerHTML = items.map(item => `
+            <tr class="hover:bg-slate-50">
+              <td class="p-2 border-r border-slate-200 font-semibold text-slate-800">${item.provider}</td>
+              <td class="p-2 border-r border-slate-200 font-mono text-[11px] text-slate-700">${item.endpoint}</td>
+              <td class="p-2 border-r border-slate-200 text-slate-600">${item.auth_type}</td>
+              <td class="p-2 border-r border-slate-200 text-[11px] font-mono text-slate-600">${typeof item.returns === 'object' ? JSON.stringify(item.returns) : item.returns}</td>
+              <td class="p-2 border-r border-slate-200">
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  ${item.verification_level}
+                </span>
+              </td>
+              <td class="p-2 text-slate-500">${item.notes} <br/><span class="text-rose-600">Thiếu: ${item.missing}</span></td>
+            </tr>
+          `).join('');
+        }
+      } catch (err) {
+        console.error('Error loading inventory:', err);
+      }
+    }
+
+    // Modal
+    function openModal(cleanPlate) {
+      const v = fleetVehicles.find(x => x.normalized_plate === cleanPlate);
+      if (!v) return;
+
+      document.getElementById('modal-plate').textContent = v.plate_number;
+      document.getElementById('modal-model').textContent = `${v.vehicle_name || 'Xe tải'} — ${v.garage || 'VTP'}`;
+      
+      const isViettel = v.provider === 'viettel';
+      const provBadge = document.getElementById('modal-provider-badge');
+      provBadge.textContent = isViettel ? 'Viettel VTracking' : 'Adsun GPS';
+      provBadge.className = `px-2 py-0.5 rounded text-[10px] font-bold ${isViettel ? 'bg-rose-100 text-rose-700' : 'bg-blue-100 text-blue-700'}`;
+
+      const motBadge = document.getElementById('modal-motion-badge');
+      motBadge.textContent = v.motion_status.toUpperCase();
+      motBadge.className = `px-2 py-0.5 rounded text-[10px] font-bold ${v.motion_status === 'moving' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'}`;
+
+      document.getElementById('modal-speed').textContent = `${Math.round(v.speed || 0)} km/h`;
+      document.getElementById('modal-ignition').textContent = v.ignition ? 'BẬT' : 'TẮT';
+      document.getElementById('modal-cargo').textContent = v.business_status || '-';
+      
+      const gpsTimeStr = v.gps_time ? new Date(v.gps_time).toLocaleTimeString('vi-VN') : 'Không rõ';
+      document.getElementById('modal-gpstime').textContent = gpsTimeStr;
+      document.getElementById('modal-address').textContent = v.address || 'Chưa có thông tin địa chỉ';
+      document.getElementById('modal-coords').textContent = (v.latitude && v.longitude) ? `${v.latitude}, ${v.longitude}` : 'Chưa có tọa độ';
+
+      document.getElementById('modal-driver').textContent = v.driver_name || 'Chưa phân công';
+      document.getElementById('modal-manager').textContent = v.manager || '-';
+      document.getElementById('modal-garage').textContent = v.garage || '-';
+      document.getElementById('modal-odo').textContent = v.current_odometer_km ? `${v.current_odometer_km.toLocaleString()} km` : '-';
+      document.getElementById('modal-maint').textContent = v.maintenance_status || 'Bình thường';
+      document.getElementById('modal-insp').textContent = v.inspection_expiry || '-';
+
+      document.getElementById('vehicle-modal').classList.remove('hidden');
+    }
+
+    function closeModal() {
+      document.getElementById('vehicle-modal').classList.add('hidden');
+    }
+
+    // Tab Switching
+    function switchTab(tabId) {
+      ['map', 'table', 'providers'].forEach(t => {
+        document.getElementById(`view-${t}`).classList.add('hidden');
+        const btn = document.getElementById(`tab-btn-${t}`);
+        btn.className = 'tab-btn px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 text-on-surface-variant hover:bg-white/60';
+      });
+
+      document.getElementById(`view-${tabId}`).classList.remove('hidden');
+      const activeBtn = document.getElementById(`tab-btn-${tabId}`);
+      activeBtn.className = 'tab-btn px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 bg-white text-secondary shadow-xs border border-slate-200';
+
+      if (tabId === 'map' && map) {
+        setTimeout(() => map.invalidateSize(), 100);
+      }
+    }
+
+    // Filter Helpers
+    function setFilter(type, val) {
+      activeFilters[type] = val;
+
+      if (type === 'status') {
+        document.querySelectorAll('.chip-status').forEach(btn => {
+          if (btn.dataset.val === val) {
+            btn.className = 'chip-status px-2 py-1 rounded bg-slate-200 font-semibold text-slate-800';
+          } else {
+            btn.className = 'chip-status px-2 py-1 rounded bg-slate-100 text-slate-600 hover:bg-slate-200';
+          }
+        });
+      } else if (type === 'provider') {
+        document.querySelectorAll('.chip-provider').forEach(btn => {
+          if (btn.dataset.val === val) {
+            btn.classList.add('bg-slate-200', 'font-semibold');
+          } else {
+            btn.classList.remove('bg-slate-200', 'font-semibold');
+          }
+        });
+      }
+
+      renderVehicleList();
+      renderMapMarkers();
+    }
+
+    function filterVehicles() {
+      activeFilters.search = document.getElementById('search-input').value;
+      renderVehicleList();
+      renderMapMarkers();
+    }
+
+    async function triggerSync() {
+      const btn = document.getElementById('btn-sync');
+      btn.disabled = true;
+      btn.innerHTML = `<span class="material-symbols-outlined text-[16px] animate-spin">refresh</span><span>Đang đồng bộ...</span>`;
+
+      try {
+        const res = await fetch('/api/fleet/sync', { method: 'POST' });
+        if (res.ok) {
+          const summary = await res.json();
+          await loadFleetData();
+          
+          // Detailed sync notification
+          const vtrInfo = summary.sync_details && summary.sync_details.viettel 
+            ? `Viettel: ${summary.sync_details.viettel.matched_dng} xe Đà Nẵng khớp GPS thật (tổng quét: ${summary.sync_details.viettel.queried_total})`
+            : 'Viettel: Chưa bật';
+          const adsunInfo = summary.sync_details && summary.sync_details.adsun 
+            ? `Adsun: ${summary.sync_details.adsun.matched_dng} xe khớp GPS (${summary.sync_details.adsun.error || 'OK'})`
+            : 'Adsun: Chưa cấu hình';
+
+          alert(`[KẾT QUẢ ĐỒNG BỘ TELEMETRY]\n` +
+                `- Tổng số xe: ${summary.total_vehicles}\n` +
+                `- Xe có GPS thật: ${summary.live_gps_count || 0}\n` +
+                `- Xe mô phỏng DEMO: ${summary.mock_gps_count || 0}\n` +
+                `- Xe chưa có GPS: ${summary.no_gps_count || 0}\n\n` +
+                `Chi tiết nhà cung cấp:\n` +
+                `• ${vtrInfo}\n` +
+                `• ${adsunInfo}`);
+        } else {
+          alert('Đồng bộ thất bại: Mã lỗi HTTP ' + res.status);
+        }
+      } catch (err) {
+        console.error('Sync failed:', err);
+        alert('Lỗi kết nối khi đồng bộ: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<span class="material-symbols-outlined text-[16px]">sync</span><span>Đồng bộ GPS</span>`;
+      }
+    }
+
+    async function testProvider(prov) {
+      alert(`Đang kiểm tra kết nối tới ${prov === 'viettel' ? 'Viettel VTracking' : 'Adsun'}...\nVui lòng cấu hình tài khoản thực tế trong file .env để thực hiện gọi API trực tiếp.`);
+    }
+
+    function exportTableToCSV() {
+      let csv = 'STT,Bien So,Hang Xe,Nha Xe,Quan Ly,Tai Xe,Nguon GPS,Trang Thai,Ton Hang,Han KD\n';
+      fleetVehicles.forEach((v, i) => {
+        csv += `"${i+1}","${v.plate_number}","${v.vehicle_name || ''}","${v.garage || ''}","${v.manager || ''}","${v.driver_name || ''}","${v.provider}","${v.business_status}","${v.pending_packages_count || 0}","${v.inspection_expiry || ''}"\n`;
+      });
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `VTP_Fleet_DaNang_${new Date().toISOString().slice(0,10)}.csv`;
+      link.click();
+    }
+  </script>
+</body>
+</html>

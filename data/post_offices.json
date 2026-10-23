@@ -1,0 +1,47 @@
+[
+  {
+    "id": "po-hub-lc",
+    "name": "Kho Hub VTP Liên Chiểu",
+    "code": "HUB_LC",
+    "latitude": 16.0682,
+    "longitude": 108.1518,
+    "address": "KCN Hòa Khánh, Liên Chiểu, Đà Nẵng",
+    "created_at": "2026-10-22T08:00:00Z"
+  },
+  {
+    "id": "po-bc-hc",
+    "name": "Bưu cục Trung tâm Hải Châu",
+    "code": "BC_HC",
+    "latitude": 16.0638,
+    "longitude": 108.2208,
+    "address": "Bạch Đằng, Hải Châu, Đà Nẵng",
+    "created_at": "2026-10-22T08:00:00Z"
+  },
+  {
+    "id": "po-bc-cl",
+    "name": "Trạm trung chuyển Cẩm Lệ",
+    "code": "BC_CL",
+    "latitude": 16.0185,
+    "longitude": 108.1965,
+    "address": "QL1A, Hòa Thọ Đông, Cẩm Lệ, Đà Nẵng",
+    "created_at": "2026-10-22T08:00:00Z"
+  },
+  {
+    "id": "po-bc-nhs",
+    "name": "Bưu cục Ngũ Hành Sơn",
+    "code": "BC_NHS",
+    "latitude": 16.0354,
+    "longitude": 108.2435,
+    "address": "Lê Văn Hiến, Ngũ Hành Sơn, Đà Nẵng",
+    "created_at": "2026-10-22T08:00:00Z"
+  },
+  {
+    "id": "po-bc-tk",
+    "name": "Kho trung chuyển Tam Kỳ",
+    "code": "BC_TK",
+    "latitude": 15.5684,
+    "longitude": 108.4842,
+    "address": "Hùng Vương, Tam Kỳ, Quảng Nam",
+    "created_at": "2026-10-22T08:00:00Z"
+  }
+]

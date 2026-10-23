@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: vtp-fleet-tracking
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    plan: free
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: VTRACKING_ENABLED
+        value: "true"
+      - key: VTRACKING_BASE_URL
+        value: "https://vtracking2.viettel.vn"
+      - key: ADSUN_ENABLED
+        value: "true"
+      - key: ADSUN_AUTH_URL
+        value: "https://auth.adsun.vn/Auth/LoginV4"
+      - key: ADSUN_API_URL
+        value: "https://systemroute.adsun.vn"
+      - key: EXCEL_DANH_SACH_XE_DNG_PATH
+        value: "data_excel/Danh sách xe DNG.xlsx"
+      - key: EXCEL_DANH_SACH_XE_PATH
+        value: "data_excel/Danh_sach_xe_10-10-2026.xlsx"

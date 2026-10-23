@@ -1,0 +1,15 @@
+.env
+.env.local
+*.log
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+data/*.sqlite
+data/*.db
+tokens/
+secrets/
+dist_windows/
+/tmp/
